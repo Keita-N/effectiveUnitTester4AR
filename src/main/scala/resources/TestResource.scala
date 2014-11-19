@@ -90,10 +90,8 @@ class TestResource(val hiveBookName: String, val ampSysDbBookName: String, val t
     }
     // DDL出力用オブジェクトの終了
     ddlOut.close()
-    // テストデータを圧縮
-    val zipFile = ZipUtility.compressDirectory((tmpDir + System.currentTimeMillis() + ".zip"), tmpDir)
-    println(zipFile.getAbsolutePath)
-    zipFile
+    // テストデータを圧縮して返却
+    ZipUtility.compress(tmpDir, (tmpDir + System.currentTimeMillis() + ".zip"))
   }
 
   /**

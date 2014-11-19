@@ -1,92 +1,79 @@
 package utils;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import java.io.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /**
- * @author saka-en.
+ * @author kazua
+ * @author k.yanagida
  */
 public class ZipUtility {
 
-    public static File compressDirectory(String zipFilePath, String targetDirPath) {
-        File zipFile = new File(zipFilePath);
-        File targetDir = new File(targetDirPath);
-        ZipOutputStream outZip = null;
+    public static File compress(String targetDirPath, String zipFilePath) {
+        File zipFile = null;
+        ZipOutputStream zos = null;
         try {
-            // ZIPファイル出力オブジェクト作成
-            outZip = new ZipOutputStream(new FileOutputStream(zipFile));
-            archive(outZip, zipFile, targetDir);
-            return zipFile;
+            zipFile = new File(zipFilePath);
+            if (!zipFile.getParentFile().exists()) zipFile.getParentFile().mkdirs();
+            zos = new ZipOutputStream(new FileOutputStream(zipFilePath));
+            File targetDir = new File(targetDirPath);
+            File[] targetFiles = targetDir.listFiles();
+            for (int i = 0; i < targetFiles.length; i++) {
+                compress(zos, zipFile, targetFiles[i], "");
+            }
         } catch (Exception e) {
-            return null;
+            e.printStackTrace();
         } finally {
-            // ZIPエントリクローズ
-            if (outZip != null) {
-                try {
-                    outZip.closeEntry();
-                } catch (Exception e) {
+            try {
+                if (zos != null) {
+                    zos.flush();
+                    zos.close();
                 }
-                try {
-                    outZip.flush();
-                } catch (Exception e) {
-                }
-                try {
-                    outZip.close();
-                } catch (Exception e) {
-                }
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
+        return zipFile;
     }
 
-
-    private static void archive(ZipOutputStream outZip, File zipFile, File targetFile) {
+    private static void compress(ZipOutputStream zos, File zipFile, File targetFile, String hrc) throws IOException {
         if (targetFile.isDirectory()) {
             File[] files = targetFile.listFiles();
-            for (File f : files) {
-                if (f.isDirectory()) {
-                    archive(outZip, zipFile, f);
-                } else {
-                    if (!f.getAbsoluteFile().equals(zipFile.getAbsoluteFile())) {
-                        // 圧縮処理
-                        archive(outZip, f, f.getName());
+            for (int i = 0; i < files.length; i++) {
+                compress(zos, zipFile, files[i], hrc + targetFile.getName() + "/");
+            }
+        } else if (!zipFile.getCanonicalFile().equals(targetFile.getCanonicalFile())) {
+            BufferedInputStream bis = null;
+            try {
+                ZipEntry entry = new ZipEntry(hrc
+                        + targetFile.getName().replace("\\", "/"));
+                zos.putNextEntry(entry);
+                byte buf[] = new byte[1024];
+                int size;
+                bis = new BufferedInputStream(
+                        new FileInputStream(targetFile.getPath()));
+                while ((size = bis.read(buf, 0, 1024)) != -1) {
+                    zos.write(buf, 0, size);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                if (zos != null) {
+                    try {
+                        zos.closeEntry();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+                if (bis != null) {
+                    try {
+                        bis.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
                     }
                 }
             }
         }
-    }
-
-    private static boolean archive(ZipOutputStream outZip, File targetFile, String entryName) {
-        // 圧縮レベル設定
-        outZip.setLevel(5);
-
-        // 文字コードを指定
-//        outZip.setEncoding(enc);
-        try {
-
-            // ZIPエントリ作成
-            outZip.putNextEntry(new ZipEntry(entryName));
-
-            // 圧縮ファイル読み込みストリーム取得
-            BufferedInputStream in = new BufferedInputStream(new FileInputStream(targetFile));
-
-            // 圧縮ファイルをZIPファイルに出力
-            int readSize = 0;
-            byte buffer[] = new byte[1024]; // 読み込みバッファ
-            while ((readSize = in.read(buffer, 0, buffer.length)) != -1) {
-                outZip.write(buffer, 0, readSize);
-            }
-            // クローズ処理
-            in.close();
-            // ZIPエントリクローズ
-            outZip.closeEntry();
-        } catch (Exception e) {
-            // ZIP圧縮失敗
-            return false;
-        }
-        return true;
     }
 }
