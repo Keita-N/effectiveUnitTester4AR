@@ -3,15 +3,14 @@ package resources
 import java.net.URLDecoder
 import java.util
 import javax.ws.rs.{GET, Path, Produces, QueryParam}
-
 import com.yammer.metrics.annotation.Timed
 import models.ExpectedData
 import org.bbreak.excella.core.SheetData
 import org.json4s.JsonDSL._
 import org.json4s.jackson.JsonMethods._
 import utils.GenericUtility
-
 import scala.collection.JavaConversions._
+import models.ExpectedData
 
 /**
  * Created by k.yanagida on 2014/11/17.
