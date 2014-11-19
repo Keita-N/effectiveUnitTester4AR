@@ -6,7 +6,7 @@ import javax.ws.rs._
 
 import com.yammer.metrics.annotation.Timed
 import models.TestData
-import utils.{GenericUtility, ZipUtility}
+import utils.{ GenericUtility, ZipUtility }
 
 import scala.collection.JavaConversions._
 
@@ -25,12 +25,15 @@ class TestResource(val hiveBookName: String, val ampSysDbBookName: String, val t
   def generate(): Object = {
 
     // 一時ディレクトリ配下のファイルを削除
-    tools.nsc.io.Directory(tmpDir).deepFiles.foreach { f => f.delete()}
+    tools.nsc.io.Directory(tmpDir).deepFiles.foreach { f => f.delete() }
 
     // Excelブックリスト
-    val books = List(
-      GenericUtility.getSheetDatas(getClass.getClassLoader.getResource(hiveBookName).getFile),
-      GenericUtility.getSheetDatas(getClass.getClassLoader.getResource(ampSysDbBookName).getFile))
+    val books = List(hiveBookName, ampSysDbBookName).map {
+      def getBook(bookName: String) = {
+        GenericUtility.getSheetDatas(getClass.getClassLoader.getResource(bookName).getFile)
+      }
+      getBook(_)
+    }
     // DDL出力用
     val ddlOut = getPrintWriter(tmpDir, "example.ddl")
     // ブックの数分繰り返し
@@ -42,46 +45,21 @@ class TestResource(val hiveBookName: String, val ampSysDbBookName: String, val t
         // @Mapsタグでデータを取得
         val dataList = sheetData.get("@Maps").asInstanceOf[util.List[util.Map[String, Object]]]
         // 出力データの生成
-        val outputData = sheetData.getSheetName match {
-          // シート名に"$"を含む場合
-          case n if n.indexOf("$") != -1 => {
-            // テーブル名の取得（"$"より前）
-            val tableName = n.substring(0, n.lastIndexOf("$"))
-            // パーティション（dt）の取得
-            val dt = dataList.get(0).get("dt").toString
-            // テストデータの設定
-            TestData(tableName, tmpDir + "Hive/", tableName + ".tsv." + dt, Option(dt))
-          }
-          // 上記以外の場合
-          case n => {
-            // テストデータの設定
-            TestData(n, (tmpDir + "AMP_SYS_DB/"), (n + ".tsv"), None)
-          }
-        }
+        val outputData = getTestData(sheetData.getSheetName(), dataList)
         // DDLの作成
         ddl.append(outputData.generateDDL())
         // データ出力用
         val dataOut = getPrintWriter(outputData.dirName, outputData.fileName)
         // レコード数分繰り返し
-        dataList.foreach { dataMap =>
-          // データ格納用
-          val str = new StringBuilder
-          // カラム数分繰り返し（key=カラム名, value=値）
-          dataMap.foreach { data =>
-            data._1 match {
-              // パーティション（dt）の場合は何もしない
-              case "dt" =>
-              // 上記以外はタブ区切りで値を格納
-              case _ => {
-                str.append(GenericUtility.convertValueToString(data._2)).append("\t")
-              }
-            }
-          }
-          // 末尾のタブ文字を削除
-          str.deleteCharAt(str.lastIndexOf("\t"))
-          // データを出力
-          dataOut.println(str)
-        }
+
+        val str = (for (
+          dataMap <- dataList;
+          data <- dataMap if data._1 != "dt"
+        ) yield GenericUtility.convertValueToString(data._2)).toList.mkString("\t")
+
+        // データを出力
+        dataOut.println(str)
+
         // データ出力用オブジェクトの終了
         dataOut.close()
       }
@@ -104,6 +82,26 @@ class TestResource(val hiveBookName: String, val ampSysDbBookName: String, val t
     val dir = new File(dirName)
     if (!dir.exists()) dir.mkdirs()
     new PrintWriter((if (dirName.endsWith("/")) dirName else dirName + "/") + fileName)
+  }
+
+  /**
+   * TestDataを取得
+   */
+  def getTestData(sheetName: String, dataList: util.List[util.Map[String, Object]]) = sheetName match {
+    // シート名に"$"を含む場合
+    case n if n.contains('$') => {
+      // テーブル名の取得（"$"より前）
+      val tableName = n.takeWhile(_ != '$')
+      // パーティション（dt）の取得
+      val dt = dataList.get(0).get("dt").toString
+      // テストデータの設定
+      TestData(tableName, tmpDir + "Hive/", tableName + ".tsv." + dt, Option(dt))
+    }
+    // 上記以外の場合
+    case n => {
+      // テストデータの設定
+      TestData(n, (tmpDir + "AMP_SYS_DB/"), (n + ".tsv"), None)
+    }
   }
 
 }
